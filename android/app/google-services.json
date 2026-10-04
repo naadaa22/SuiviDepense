@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "611391627420",
+    "project_id": "suividepenses-17d53",
+    "storage_bucket": "suividepenses-17d53.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:611391627420:android:5bfbc48b8c6bc85fcdcd59",
+        "android_client_info": {
+          "package_name": "com.example.flutter_application_1"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCAVopPUFjRbhMwXqFkyr4_SHQXnsyzAuM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
