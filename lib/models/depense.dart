@@ -13,7 +13,6 @@ class Depense {
     required this.date,
   });
 
-  // Pour envoyer les données vers Firebase
   Map<String, dynamic> toMap() {
     return {
       'nom': nom,
@@ -23,14 +22,13 @@ class Depense {
     };
   }
 
-  // Pour lire les données venant de Firebase
   factory Depense.fromMap(Map<String, dynamic> map, String id) {
     return Depense(
       id: id,
       nom: map['nom'] ?? '',
-      montant: (map['montant'] as num).toDouble(),
+      montant: (map['montant'] as num?)?.toDouble() ?? 0.0,
       categorie: map['categorie'] ?? 'Autre',
-      date: DateTime.parse(map['date']),
+      date: DateTime.tryParse(map['date'] ?? '') ?? DateTime.now(),
     );
   }
 }

@@ -1,5 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../models/depense.dart';
 import 'add_depense_page.dart';
@@ -9,14 +9,49 @@ class HomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return const SizedBox();
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Suivi de Dépenses'),
+        title: const Text('Mes Dépenses'),
         backgroundColor: Colors.deepPurple,
         foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Se déconnecter',
+            onPressed: () async {
+              await FirebaseAuth.instance.signOut();
+            },
+          ),
+        ],
       ),
-      body: Firebase.apps.isEmpty
-          ? const Center(
+      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        // 🔑 FILTRE : uniquement les dépenses de l'utilisateur connecté
+        stream: FirebaseFirestore.instance
+            .collection('depenses')
+            .where('userId', isEqualTo: user.uid)
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (snapshot.hasError) {
+            return Center(child: Text('Erreur : ${snapshot.error}'));
+          }
+
+          // Tri côté client (évite de créer un index composite)
+          final depenses = (snapshot.data?.docs ?? []).toList()
+            ..sort((a, b) {
+              final da = a.data()['date'] ?? '';
+              final db = b.data()['date'] ?? '';
+              return db.compareTo(da); // plus récentes d'abord
+            });
+
+          if (depenses.isEmpty) {
+            return const Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -24,7 +59,8 @@ class HomePage extends StatelessWidget {
                   SizedBox(height: 16),
                   Text(
                     'Aucune dépense enregistrée',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
+                    style: TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.w500),
                   ),
                   SizedBox(height: 8),
                   Text(
@@ -33,86 +69,127 @@ class HomePage extends StatelessWidget {
                   ),
                 ],
               ),
-            )
-          : StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              stream: FirebaseFirestore.instance
-                  .collection('depenses')
-                  .orderBy('date', descending: true)
-                  .snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
+            );
+          }
 
-                if (snapshot.hasError) {
-                  return Center(
-                    child: Text('Erreur : ${snapshot.error}'),
-                  );
-                }
+          double total = 0;
+          for (final doc in depenses) {
+            final d = Depense.fromMap(doc.data(), doc.id);
+            total += d.montant;
+          }
 
-                final depenses = snapshot.data?.docs ?? [];
-
-                if (depenses.isEmpty) {
-                  return const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.receipt_long, size: 72, color: Colors.grey),
-                        SizedBox(height: 16),
-                        Text(
-                          'Aucune dépense enregistrée',
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
-                        ),
-                        SizedBox(height: 8),
-                        Text(
-                          'Ajoutez votre première dépense pour commencer',
-                          style: TextStyle(color: Colors.grey),
-                        ),
-                      ],
+          return Column(
+            children: [
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                color: Colors.deepPurple.shade50,
+                child: Column(
+                  children: [
+                    Text(
+                      'Bonjour ${user.email ?? ""}',
+                      style: const TextStyle(fontSize: 13, color: Colors.grey),
                     ),
-                  );
-                }
-
-                return ListView.builder(
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Total des dépenses',
+                      style: TextStyle(fontSize: 14, color: Colors.grey),
+                    ),
+                    Text(
+                      '${total.toStringAsFixed(2)} €',
+                      style: const TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.deepPurple,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: ListView.builder(
                   itemCount: depenses.length,
                   itemBuilder: (context, index) {
                     final doc = depenses[index];
                     final depense = Depense.fromMap(doc.data(), doc.id);
-                    final categorie = depense.categorie;
-                    final montant = depense.montant;
-
                     return Card(
-                      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      margin: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
                       child: ListTile(
                         leading: CircleAvatar(
-                          backgroundColor: _getCategoryColor(categorie),
-                          child: Text(categorie.isNotEmpty ? categorie[0] : '?'),
+                          backgroundColor:
+                              _getCategoryColor(depense.categorie),
+                          child: Text(
+                            depense.categorie.isNotEmpty
+                                ? depense.categorie[0]
+                                : '?',
+                            style: const TextStyle(color: Colors.white),
+                          ),
                         ),
                         title: Text(
                           depense.nom,
-                          style: const TextStyle(fontWeight: FontWeight.bold),
+                          style:
+                              const TextStyle(fontWeight: FontWeight.bold),
                         ),
                         subtitle: Text(
-                          '${depense.date.day}/${depense.date.month}/${depense.date.year} · $categorie',
+                          '${depense.date.day}/${depense.date.month}/${depense.date.year} · ${depense.categorie}',
                         ),
                         trailing: Text(
-                          '${montant.toStringAsFixed(2)} €',
-                          style: const TextStyle(fontSize: 16, color: Colors.red),
+                          '${depense.montant.toStringAsFixed(2)} €',
+                          style: const TextStyle(
+                              fontSize: 16,
+                              color: Colors.red,
+                              fontWeight: FontWeight.w600),
                         ),
+                        onLongPress: () =>
+                            _supprimerDepense(context, doc.id),
                       ),
                     );
                   },
-                );
-              },
-            ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => const AddDepensePage()),
+            MaterialPageRoute(builder: (_) => const AddDepensePage()),
           );
         },
+        backgroundColor: Colors.deepPurple,
+        foregroundColor: Colors.white,
         child: const Icon(Icons.add),
+      ),
+    );
+  }
+
+  void _supprimerDepense(BuildContext context, String id) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Supprimer ?'),
+        content:
+            const Text('Voulez-vous vraiment supprimer cette dépense ?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Annuler'),
+          ),
+          TextButton(
+            onPressed: () async {
+              await FirebaseFirestore.instance
+                  .collection('depenses')
+                  .doc(id)
+                  .delete();
+              if (ctx.mounted) Navigator.pop(ctx);
+            },
+            child: const Text('Supprimer',
+                style: TextStyle(color: Colors.red)),
+          ),
+        ],
       ),
     );
   }
